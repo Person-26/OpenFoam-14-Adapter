@@ -7,5 +7,6 @@
 #include "DisplacementDelta.C"
 #include "Velocity.C"
 #include "PropellerLoad.C"
+#include "PropellerRPM.C"
 #include "ControlDeflection.C"
 #include "SurfaceHinge.C"

@@ -285,6 +285,13 @@ bool preciceAdapter::FSI::FluidStructureInteraction::addReaders(std::string data
             new ControlDeflection(mesh_, controlSurfaces_));
         DEBUG(adapterInfo("Added reader: ControlDeflection."));
     }
+    else if (dataName.find("RPM") == 0)
+    {
+        interface->addCouplingDataReader(
+            dataName,
+            new PropellerRPM(mesh_, propellerNames_));
+        DEBUG(adapterInfo("Added reader: PropellerRPM."));
+    }
     else
     {
         found = false;

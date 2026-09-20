@@ -9,6 +9,7 @@
 #include "FSI/Stress.H"
 #include "FSI/Velocity.H"
 #include "FSI/PropellerLoad.H"
+#include "FSI/PropellerRPM.H"
 #include "FSI/ControlDeflection.H"
 #include "FSI/SurfaceHinge.H"
 
