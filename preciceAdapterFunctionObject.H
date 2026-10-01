@@ -133,6 +133,12 @@ public:
     //- Write the preciceAdapterFunctionObject
     bool write() final;
 
+    //- Limit the solver's (adjustable) time step to the rest of the preCICE
+    //  coupling window. OpenFOAM's modular solvers (foamRun) set the time step
+    //  after the function objects execute, so this is how the coupling window
+    //  constrains it.
+    scalar maxDeltaT() const final;
+
     //- Return the list of fields required
     //  (pure virtual since OpenFOAM 10)
     virtual wordList fields() const

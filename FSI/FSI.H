@@ -11,6 +11,8 @@
 #include "FSI/PropellerLoad.H"
 #include "FSI/PropellerRPM.H"
 #include "FSI/ControlDeflection.H"
+#include "FSI/ControlCommand.H"
+#include "FSI/BodyPose.H"
 #include "FSI/SurfaceHinge.H"
 
 #include "OpenFOAMCompatibility.H"

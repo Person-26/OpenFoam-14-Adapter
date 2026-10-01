@@ -223,6 +223,13 @@ bool preciceAdapter::FSI::FluidStructureInteraction::addWriters(std::string data
             new SurfaceHinge(mesh_, solverType_, controlSurfaces_, true));
         DEBUG(adapterInfo("Added writer: SurfaceHinge (moment)."));
     }
+    else if (dataName.find("ServoCommand") == 0)
+    {
+        interface->addCouplingDataWriter(
+            dataName,
+            new ControlCommand(mesh_, controlSurfaces_));
+        DEBUG(adapterInfo("Added writer: ControlCommand."));
+    }
     else
     {
         found = false;
@@ -277,6 +284,27 @@ bool preciceAdapter::FSI::FluidStructureInteraction::addReaders(std::string data
             dataName,
             new Velocity(mesh_));
         DEBUG(adapterInfo("Added reader: Velocity."));
+    }
+    else if (dataName.find("BodyDisplacement") == 0)
+    {
+        interface->addCouplingDataReader(
+            dataName,
+            new BodyPose(mesh_, false));
+        DEBUG(adapterInfo("Added reader: BodyPose (displacement)."));
+    }
+    else if (dataName.find("BodyRotation") == 0)
+    {
+        interface->addCouplingDataReader(
+            dataName,
+            new BodyPose(mesh_, true));
+        DEBUG(adapterInfo("Added reader: BodyPose (rotation)."));
+    }
+    else if (dataName.find("ServoAngle") == 0)
+    {
+        interface->addCouplingDataReader(
+            dataName,
+            new ControlDeflection(mesh_, controlSurfaces_, true));
+        DEBUG(adapterInfo("Added reader: ControlDeflection (servo angle)."));
     }
     else if (dataName.find("Deflection") == 0)
     {

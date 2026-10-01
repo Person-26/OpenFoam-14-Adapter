@@ -411,6 +411,10 @@ public:
     //- Called by the functionObject's end()
     void end();
 
+    //- Largest solver time step preCICE allows now (the rest of the current
+    //  coupling window); vGreat when not coupled (yet)
+    double maxTimeStepSize() const;
+
     //- Destructor
     ~Adapter();
 };

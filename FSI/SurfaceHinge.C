@@ -1,4 +1,5 @@
 #include "SurfaceHinge.H"
+#include "BodyFrame.H"
 
 using namespace Foam;
 
@@ -27,6 +28,11 @@ std::size_t preciceAdapter::FSI::SurfaceHinge::write(double* buffer, bool meshCo
     const auto& pb = mesh_.lookupObject<volScalarField>("p").boundaryField();
 
     std::size_t bufferIndex = 0;
+
+    // With the mesh moving with a vehicle, work in the body (reference)
+    // frame: the hinge point is a reference point, so take the face centres
+    // back there and the forces into the body frame.
+    const RigidPose pose = bodyPose(mesh_);
 
     // One value per control surface.
     for (const auto& surface : controlSurfaces_)
@@ -60,11 +66,17 @@ std::size_t preciceAdapter::FSI::SurfaceHinge::write(double* buffer, bool meshCo
 
             f += mesh_.magSf().boundaryField()[patchID][i] * devRhoReffb[patchID][i];
 
+            f = pose.toBody(f);
             totalF += f;
 
-            const Foam::vector centre = mesh_.boundary()[patchID].poly().faceCentres()[i];
+            const Foam::vector centre = pose.toReference(
+                mesh_.boundary()[patchID].poly().faceCentres()[i]);
             totalM += (centre - hinge) ^ f;
         }
+
+        // In parallel each rank holds only its own faces of the surface.
+        reduce(totalF, sumOp<Foam::vector>());
+        reduce(totalM, sumOp<Foam::vector>());
 
         const Foam::vector value = isMoment_ ? totalM : totalF;
         for (unsigned int d = 0; d < dim; ++d)

@@ -1,4 +1,5 @@
 #include "PropellerLoad.H"
+#include "BodyFrame.H"
 
 #include "fvModels.H"
 #include "propellerDisk.H"
@@ -35,7 +36,9 @@ std::size_t preciceAdapter::FSI::PropellerLoad::write(double* buffer, bool meshC
         // (thrust) direction; the reaction on the airframe is therefore
         // in the -normal direction. We pass the aircraft-side thrust as
         // -prop.force() and the reaction torque as -prop.moment().
-        const Foam::vector value = isMoment_ ? -prop.moment() : -prop.force();
+        // In the body frame when the mesh moves with a vehicle.
+        const Foam::vector value = bodyPose(mesh_).toBody(
+            isMoment_ ? -prop.moment() : -prop.force());
 
         for (unsigned int d = 0; d < dim; ++d)
             buffer[bufferIndex++] = value[d];

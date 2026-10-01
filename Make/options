@@ -12,6 +12,8 @@ EXE_INC = \
     -I$(LIB_SRC)/MomentumTransportModels/compressible/lnInclude \
     -I$(LIB_SRC)/MomentumTransportModels/incompressible/lnInclude \
     -I$(LIB_SRC)/triSurface/lnInclude \
+    -I$(LIB_SRC)/pointMeshMovers/lnInclude \
+    -I$(LIB_SRC)/fvMeshMovers/fvMotionSolvers/lnInclude \
     $(ADAPTER_PKG_CONFIG_CFLAGS) \
     -I../ \
     $(ADAPTER_PREP_FLAGS)
@@ -26,5 +28,7 @@ LIB_LIBS = \
     -lthermophysicalTransportModel \
     -lfluidThermophysicalModels \
     -lpropellerDisk \
+    -lpointMeshMovers \
+    -lfvMotionSolvers \
     $(ADAPTER_PKG_CONFIG_LIBS) \
     -lprecice

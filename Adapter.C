@@ -451,7 +451,17 @@ void preciceAdapter::Adapter::execute()
     // Read the coupling data received from the coupling partners. This makes
     // the AirVelocity, Displacement and Deflection readers apply their values
     // (e.g. the moving-wall velocity and the control-surface rotations).
-    readCouplingData(timestepSolver_);
+    // Only valid while the coupling is still ongoing: after the final advance()
+    // there is no current time window, and sampling it makes preCICE throw
+    // ("cannot sample data outside of current time window"). The final window
+    // has no following solver step, so there is nothing to apply it to.
+    if (isCouplingOngoing())
+    {
+        // Sample where the next step is expected to end, but never past the
+        // current window: with an adjustable time step the previous step can
+        // be longer than what is left of the window.
+        readCouplingData(std::min(timestepSolver_, precice_->getMaxTimeStepSize()));
+    }
 
     // Read checkpoint if required
     if (requiresReadingCheckpoint())
@@ -603,6 +613,13 @@ void preciceAdapter::Adapter::advance()
     DEBUG(adapterInfo("Advancing preCICE..."));
 
     SETUP_TIMER();
+    // With an adjustable time step the solver chooses each step itself
+    // (bounded by maxDeltaT(), i.e. the rest of the coupling window), so
+    // advance preCICE by the step it actually took.
+    if (adjustableTimestep_)
+    {
+        timestepSolver_ = runTime_.deltaTValue();
+    }
     precice_->advance(timestepSolver_);
     ACCUMULATE_TIMER(timeInAdvance_);
 
@@ -710,6 +727,15 @@ void preciceAdapter::Adapter::adjustSolverTimeStepAndReadData()
     const_cast<Time&>(runTime_).setDeltaTNoAdjust(timestepSolver_);
 
     return;
+}
+
+double preciceAdapter::Adapter::maxTimeStepSize() const
+{
+    if (precice_ != nullptr && preciceInitialized_ && precice_->isCouplingOngoing())
+    {
+        return precice_->getMaxTimeStepSize();
+    }
+    return Foam::vGreat;
 }
 
 bool preciceAdapter::Adapter::isCouplingOngoing()

@@ -9,4 +9,7 @@
 #include "PropellerLoad.C"
 #include "PropellerRPM.C"
 #include "ControlDeflection.C"
+#include "ControlCommand.C"
 #include "SurfaceHinge.C"
+#include "BodyPose.C"
+#include "BodyDisplacementLaplacian.C"

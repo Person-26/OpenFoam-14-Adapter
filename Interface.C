@@ -479,6 +479,17 @@ void preciceAdapter::Interface::configureMesh(const fvMesh& mesh, const std::str
                 vertices[verticesIndex++] = point[d];
         }
 
+        // Fixed points (propeller hubs, hinges) belong to the whole domain,
+        // not to a processor's piece of it: in parallel only the master rank
+        // gives them to preCICE (every rank would otherwise add a copy). The
+        // buffer stays full-size on every rank; readCouplingData() and
+        // writeCouplingData() share the values across ranks.
+        if (Pstream::parRun() && !Pstream::master())
+        {
+            vertices.clear();
+            vertexIDs_.clear();
+        }
+
         // Pass the mesh vertices information to preCICE
         precice_.setMeshVertices(meshName_, vertices, vertexIDs_);
     }
@@ -593,7 +604,8 @@ void preciceAdapter::Interface::readCouplingData(double relativeReadTime)
 
         // Make preCICE read vector or scalar data
         // and fill the adapter's buffer
-        std::size_t nReadData = vertexIDs_.size() * precice_.getDataDimensions(meshName_, couplingDataReader->dataName());
+        const int dataDim = precice_.getDataDimensions(meshName_, couplingDataReader->dataName());
+        std::size_t nReadData = vertexIDs_.size() * dataDim;
         // We could add a sanity check here
         // nReadData == vertexIDs_.size() * (1 + (dim_ - 1) * static_cast<int>(couplingDataReader->hasVectorData()));
 
@@ -603,6 +615,23 @@ void preciceAdapter::Interface::readCouplingData(double relativeReadTime)
             vertexIDs_,
             relativeReadTime,
             {dataBuffer_.data(), nReadData});
+
+        // Fixed points live on the master rank only (see configureMesh()):
+        // hand what it read to every rank, which all apply it (e.g. the RPM
+        // of each propeller disk, the rotation of each control surface).
+        if (locationType_ == LocationType::fixedPoints && Pstream::parRun())
+        {
+            Foam::List<double> values(fixedPoints_.size() * dataDim);
+            forAll(values, k)
+            {
+                values[k] = dataBuffer_[k];
+            }
+            Pstream::scatter(values);
+            forAll(values, k)
+            {
+                dataBuffer_[k] = values[k];
+            }
+        }
 
         // Read the received data from the buffer
         couplingDataReader->read(dataBuffer_.data(), dim_);
@@ -622,8 +651,15 @@ void preciceAdapter::Interface::writeCouplingData()
         preciceAdapter::CouplingDataUser*
             couplingDataWriter = couplingDataWriters_.at(i);
 
-        // Write the data into the adapter's buffer
+        // Write the data into the adapter's buffer. Every rank calls the
+        // writer, so writers of fixed-point data can reduce across ranks.
         auto nWrittenData = couplingDataWriter->write(dataBuffer_.data(), meshConnectivity_, dim_);
+
+        // Fixed points live on the master rank only: the others pass nothing.
+        if (locationType_ == LocationType::fixedPoints && vertexIDs_.empty())
+        {
+            nWrittenData = 0;
+        }
 
         // Make preCICE write vector or scalar data
         precice_.writeData(

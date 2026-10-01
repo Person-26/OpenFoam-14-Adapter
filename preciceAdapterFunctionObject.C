@@ -28,6 +28,10 @@ License
 // OpenFOAM header files
 #include "Time.H"
 #include "fvMesh.H"
+#include "fvcSurfaceIntegrate.H"
+#include "surfaceFields.H"
+
+#include <cmath>
 #include "addToRunTimeSelectionTable.H"
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
@@ -102,6 +106,54 @@ bool Foam::functionObjects::preciceAdapterFunctionObject::read(const dictionary&
     return true;
 }
 
+
+Foam::scalar Foam::functionObjects::preciceAdapterFunctionObject::maxDeltaT() const
+{
+    const scalar remaining = adapter_.maxTimeStepSize();
+    if (remaining >= 0.5*vGreat)
+    {
+        return vGreat;
+    }
+
+    // The step the solver would like to take: grown by at most deltaTFactor
+    // and within the Courant limit (computed as incompressibleFluid does).
+    const Time& runTime = mesh_.time();
+    const dictionary& controlDict = runTime.controlDict();
+    const scalar deltaT = runTime.deltaTValue();
+    // (A hair under the growth cap, so rounding never lets it bind.)
+    scalar wanted =
+        0.999*controlDict.lookupOrDefault<scalar>("deltaTFactor", 1.2)*deltaT;
+    if (mesh_.foundObject<surfaceScalarField>("phi"))
+    {
+        const surfaceScalarField& phi =
+            mesh_.lookupObject<surfaceScalarField>("phi");
+        const scalarField sumPhi
+        (
+            fvc::surfaceSum(mag(phi))().primitiveField()
+        );
+        const scalar CoNum = 0.5*gMax(sumPhi/mesh_.V().primitiveField())*deltaT;
+        if (CoNum > small)
+        {
+            // The Courant target is couplingMaxCo; set the solver's own maxCo
+            // well above it, so the solver never cuts a step short of the
+            // window's end (its Courant number is evaluated at a slightly
+            // different point and can bind just below this one).
+            const scalar maxCo = controlDict.lookupOrDefault<scalar>
+            (
+                "couplingMaxCo",
+                controlDict.lookupOrDefault<scalar>("maxCo", 1)
+            );
+            wanted = min(wanted, maxCo/CoNum*deltaT);
+        }
+    }
+
+    // Split what is left of the coupling window into equal steps no longer
+    // than that. Every window then ends exactly on a step; otherwise the last
+    // step leaves a sliver (down to rounding-error size) and the time step
+    // collapses, since it can only regrow by deltaTFactor per step.
+    const label n = max(label(1), label(std::ceil(remaining/wanted - 1e-6)));
+    return remaining/n;
+}
 
 bool Foam::functionObjects::preciceAdapterFunctionObject::execute()
 {

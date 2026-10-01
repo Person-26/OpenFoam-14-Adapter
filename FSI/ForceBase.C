@@ -1,4 +1,5 @@
 #include "ForceBase.H"
+#include "BodyFrame.H"
 #include "fluidThermo.H"
 
 using namespace Foam;
@@ -156,6 +157,8 @@ std::size_t preciceAdapter::FSI::ForceBase::writeToBuffer(double* buffer,
     const auto& pb = mesh_.lookupObject<volScalarField>("p").boundaryField();
 
     int bufferIndex = 0;
+
+    const RigidPose pose = bodyPose(mesh_);
     // For every boundary patch of the interface
     for (const label patchID : patchIDs_)
     {
@@ -186,13 +189,15 @@ std::size_t preciceAdapter::FSI::ForceBase::writeToBuffer(double* buffer,
         forceField.boundaryFieldRef()[patchID] +=
             mesh_.magSf().boundaryField()[patchID] * devRhoReffb[patchID];
 
-        // Write the forces to the preCICE buffer
+        // Write the forces to the preCICE buffer, in the body frame when
+        // the mesh moves with a vehicle (BodyFrame.H; the identity otherwise)
         // For every cell of the patch
         forAll(forceField.boundaryField()[patchID], i)
         {
+            const Foam::vector f =
+                pose.toBody(forceField.boundaryField()[patchID][i]);
             for (unsigned int d = 0; d < dim; ++d)
-                buffer[bufferIndex++] =
-                    forceField.boundaryField()[patchID][i][d];
+                buffer[bufferIndex++] = f[d];
         }
     }
     return bufferIndex;

@@ -3,6 +3,9 @@
 
 #include "ForceBase.H"
 
+#include <utility>
+#include <vector>
+
 namespace preciceAdapter
 {
 namespace FSI
@@ -19,6 +22,16 @@ class Stress : public ForceBase
 private:
     //- Stress field
     Foam::volVectorField* Stress_;
+
+    //- Buffer locations of the two sides of each zero-thickness baffle face
+    //  in the interface (coincident face centres, opposing normals)
+    std::vector<std::pair<std::size_t, std::size_t>> bafflePairs_;
+
+    //- Whether bafflePairs_ has been built
+    bool bafflePairsBuilt_ = false;
+
+    //- Find the baffle face pairs among the interface faces
+    void findBafflePairs();
 
 public:
     //- Constructor
