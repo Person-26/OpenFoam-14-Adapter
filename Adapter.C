@@ -45,6 +45,27 @@ bool preciceAdapter::Adapter::configFileRead()
         participantName_ = static_cast<word>(preciceDict.lookup("participant"));
         DEBUG(adapterInfo("  participant name    : " + participantName_));
 
+        // Predictor for the data a parallel coupling holds constant across a
+        // window (default hold: as received).
+        if (const auto* predictorDict = preciceDict.subDictPtr("predictor"))
+        {
+            const word mode = predictorDict->lookupOrDefault<word>("mode", "hold");
+            const wordList modes({"hold", "ramp", "linear", "velocity", "ab2"});
+            const label m = findIndex(modes, mode);
+            if (m < 0)
+            {
+                adapterInfo("Unknown predictor mode \"" + mode
+                                + "\" (hold, ramp, linear, velocity, ab2).",
+                            "error");
+            }
+            predictorMode_ = m;
+            predictorVelocityData_ =
+                predictorDict->lookupOrDefault<word>("velocityData", word());
+            adapterInfo("  predictor : " + mode
+                            + (predictorVelocityData_.empty() ? "" : " (velocity " + predictorVelocityData_ + ")"),
+                        "info");
+        }
+
         // Read and display the list of modules
         DEBUG(adapterInfo("  modules requested   : "));
         auto modules_ = static_cast<wordList>(preciceDict.lookup("modules"));
@@ -293,6 +314,8 @@ void preciceAdapter::Adapter::configure()
             bool restartFromDeformed = FSIenabled_ ? FSI_->isRestartingFromDeformed() : false;
 
             Interface* interface = new Interface(*precice_, mesh_, interfacesConfig_.at(i).meshName, interfacesConfig_.at(i).locationsType, interfacesConfig_.at(i).patchNames, interfacesConfig_.at(i).cellSetNames, interfacesConfig_.at(i).propellerNames, interfacesConfig_.at(i).interfacePoints, interfacesConfig_.at(i).meshConnectivity, restartFromDeformed, namePointDisplacement, nameCellDisplacement);
+            interface->setPredictor(predictorMode_, predictorVelocityData_);
+            interface->setRestarted(runTime_.startTime().value() > 0);
             interfaces_.push_back(interface);
             DEBUG(adapterInfo("Interface created on mesh " + interfacesConfig_.at(i).meshName));
 
@@ -448,6 +471,14 @@ void preciceAdapter::Adapter::execute()
     // Advance preCICE
     advance();
 
+    // A new coupling window starts here: the predictor shifts its history.
+    if (isCouplingOngoing() && isCouplingTimeWindowComplete())
+    {
+        ++couplingWindow_;
+        windowStart_ = runTime_.value();
+        windowSize_ = precice_->getMaxTimeStepSize();
+    }
+
     // Read the coupling data received from the coupling partners. This makes
     // the AirVelocity, Displacement and Deflection readers apply their values
     // (e.g. the moving-wall velocity and the control-surface rotations).
@@ -541,8 +572,15 @@ void preciceAdapter::Adapter::readCouplingData(double relativeReadTime)
     SETUP_TIMER();
     DEBUG(adapterInfo("Reading coupling data..."));
 
+    // Fraction of the window elapsed where this read is sampled (the end of
+    // the next solver step), for the predictor.
+    const double tau = windowSize_ > 0
+                         ? std::min(1.0, std::max(0.0, (runTime_.value() + relativeReadTime - windowStart_) / windowSize_))
+                         : 0.0;
+
     for (uint i = 0; i < interfaces_.size(); i++)
     {
+        interfaces_.at(i)->setWindow(couplingWindow_, tau, windowSize_);
         interfaces_.at(i)->readCouplingData(relativeReadTime);
     }
 
@@ -577,6 +615,8 @@ void preciceAdapter::Adapter::initialize()
     DEBUG(adapterInfo("Initializing preCICE data..."));
     precice_->initialize();
     preciceInitialized_ = true;
+    windowStart_ = runTime_.value();
+    windowSize_ = precice_->getMaxTimeStepSize();
     ACCUMULATE_TIMER(timeInInitialize_);
 
     adapterInfo("preCICE was configured and initialized", "info");

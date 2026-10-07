@@ -633,8 +633,97 @@ void preciceAdapter::Interface::readCouplingData(double relativeReadTime)
             }
         }
 
+        if (restarted_ && window_ == 0
+            && (couplingDataReader->dataName() == "ServoAngle"
+                || couplingDataReader->dataName() == "RPM"))
+        {
+            continue;
+        }
+
+        if (predictor_ != hold
+            && (couplingDataReader->dataName() == "Displacement"
+                || couplingDataReader->dataName() == "ServoAngle"))
+        {
+            const std::size_t n =
+                (locationType_ == LocationType::fixedPoints && Pstream::parRun())
+                    ? fixedPoints_.size() * dataDim
+                    : nReadData;
+            predict(couplingDataReader->dataName(), n, relativeReadTime);
+        }
+
         // Read the received data from the buffer
         couplingDataReader->read(dataBuffer_.data(), dim_);
+    }
+}
+
+void preciceAdapter::Interface::setPredictor(int mode, const std::string& velocityData)
+{
+    predictor_ = mode;
+    velocityData_ = velocityData;
+}
+
+void preciceAdapter::Interface::setWindow(long window, double tau, double windowSize)
+{
+    window_ = window;
+    tau_ = tau;
+    windowSize_ = windowSize;
+}
+
+void preciceAdapter::Interface::predict(
+    const std::string& dataName,
+    std::size_t n,
+    double relativeReadTime)
+{
+    History& h = history_[dataName];
+    const bool withVelocity = (predictor_ == velocity || predictor_ == ab2)
+                              && dataName == "Displacement" && !velocityData_.empty();
+
+    // Shift the history once per window: the solver reads several times
+    // within one, always getting the same (held) sample.
+    if (h.window != window_)
+    {
+        std::vector<double> d(dataBuffer_.begin(), dataBuffer_.begin() + n);
+        std::vector<double> v;
+        if (withVelocity)
+        {
+            v.resize(n);
+            precice_.readData(meshName_, velocityData_, vertexIDs_, relativeReadTime, {v.data(), n});
+        }
+        if (h.window < 0)
+        {
+            h.prev = d;
+            h.vprev = v;
+        }
+        else
+        {
+            h.prev = h.cur;
+            h.vprev = h.vcur;
+        }
+        h.cur = d;
+        h.vcur = v;
+        h.window = window_;
+    }
+
+    const double t = tau_;
+    const double w = windowSize_;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        const double d = h.cur[i];
+        const double dp = h.prev[i];
+        double value = d + t * (d - dp); // linear
+        if (predictor_ == ramp)
+        {
+            value = dp + t * (d - dp);
+        }
+        else if (predictor_ == velocity && withVelocity)
+        {
+            value = d + t * w * h.vcur[i];
+        }
+        else if (predictor_ == ab2 && withVelocity)
+        {
+            value = d + t * w * h.vcur[i] + 0.5 * t * t * w * (h.vcur[i] - h.vprev[i]);
+        }
+        dataBuffer_[i] = value;
     }
 }
 

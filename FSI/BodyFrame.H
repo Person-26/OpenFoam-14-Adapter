@@ -23,7 +23,7 @@ namespace FSI
 //  The coupling delivers the pose once per window, at the window's start; a
 //  mesh moved only then would jump every window (a spike of wall velocity,
 //  with the added-mass pressure that goes with it). So the readers store a
-//  cubic in the time since the latest sample arrived ("bodyPoseTime"): the
+//  cubic in the time since that field's latest sample arrived ("<field>Time"): the
 //  value and "<field>Rate", "<field>Acc", "<field>Jerk" coefficients of a
 //  Catmull-Rom segment through the samples (see BodyPose::read()),
 //  continuous in position and velocity, two windows behind the vehicle.
@@ -108,11 +108,17 @@ inline Foam::uniformDimensionedVectorField& bodyPoseField(
         db.lookupObject<Foam::uniformDimensionedVectorField>(name));
 }
 
-//- The pose sample time field, created (zero) if it does not exist
+//- The time the latest sample of a pose field ("bodyDisplacement",
+//  "bodyRotation") arrived, created (zero) if it does not exist. Each field
+//  keeps its own: a field whose value does not change (e.g. the attitude of
+//  a vehicle carried level) gets no new sample, and a shared time would then
+//  be set back to its old one, extrapolating the other field's cubic from
+//  there (the mesh then moved at twice the carried speed).
 inline Foam::uniformDimensionedScalarField& bodyPoseTime(
-    const Foam::objectRegistry& db)
+    const Foam::objectRegistry& db,
+    const Foam::word& field)
 {
-    const Foam::word name("bodyPoseTime");
+    const Foam::word name(field + "Time");
     if (!db.foundObject<Foam::uniformDimensionedScalarField>(name))
     {
         Foam::uniformDimensionedScalarField* f =
@@ -137,11 +143,11 @@ inline RigidPose bodyPose(const Foam::objectRegistry& db)
     RigidPose pose;
     if (db.foundObject<Foam::uniformDimensionedVectorField>("bodyCentre"))
     {
-        const Foam::scalar tau =
-            db.time().value() - bodyPoseTime(db).value();
         pose.centre = bodyPoseField(db, "bodyCentre").value();
         const auto cubic = [&](const Foam::word& name)
         {
+            const Foam::scalar tau =
+                db.time().value() - bodyPoseTime(db, name).value();
             return bodyPoseField(db, name).value()
                  + tau * (bodyPoseField(db, name + "Rate").value()
                  + tau * (bodyPoseField(db, name + "Acc").value()

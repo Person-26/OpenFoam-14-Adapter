@@ -107,6 +107,17 @@ private:
     //- Interfaces
     std::vector<Interface*> interfaces_;
 
+    //- Predictor for the data a parallel coupling holds constant across a
+    //  window (preciceDict: predictor { mode ...; velocityData ...; }), see
+    //  Interface::setPredictor()
+    int predictorMode_ = 0;
+    std::string predictorVelocityData_;
+
+    //- Coupling window count, start time and size, for the predictor
+    long couplingWindow_ = 0;
+    double windowStart_ = 0;
+    double windowSize_ = 0;
+
     //- preCICE solver interface
     precice::Participant* precice_ = nullptr;
 

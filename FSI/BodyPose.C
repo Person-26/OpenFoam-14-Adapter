@@ -31,9 +31,10 @@ void preciceAdapter::FSI::BodyPose::setWallVelocity() const
     {
         return;
     }
-    const Foam::scalar tau = mesh_.time().value() - bodyPoseTime(mesh_).value();
     const auto rate = [&](const word& name)
     {
+        const Foam::scalar tau =
+            mesh_.time().value() - bodyPoseTime(mesh_, name).value();
         return bodyPoseField(mesh_, name + "Rate").value()
              + tau * (2 * bodyPoseField(mesh_, name + "Acc").value()
              + tau * 3 * bodyPoseField(mesh_, name + "Jerk").value());
@@ -128,7 +129,7 @@ void preciceAdapter::FSI::BodyPose::read(double* buffer, const unsigned int dim)
     bodyPoseField(mesh_, fieldName_ + "Rate").value() = a1;
     bodyPoseField(mesh_, fieldName_ + "Acc").value() = a2;
     bodyPoseField(mesh_, fieldName_ + "Jerk").value() = a3;
-    bodyPoseTime(mesh_).value() = tLatest_;
+    bodyPoseTime(mesh_, fieldName_).value() = tLatest_;
 
     setWallVelocity();
 }

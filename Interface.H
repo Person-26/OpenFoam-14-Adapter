@@ -1,6 +1,7 @@
 #ifndef INTERFACE_H
 #define INTERFACE_H
 
+#include <map>
 #include <string>
 #include <vector>
 #include "OpenFOAMCompatibility.H"
@@ -70,6 +71,27 @@ protected:
     // Simulation dimension
     unsigned int dim_;
 
+    //- History of a predicted data field (see predict())
+    struct History
+    {
+        long window = -1;
+        std::vector<double> cur, prev, vcur, vprev;
+    };
+
+    //- Predictor mode, its velocity data, and the current window
+    //  (set by the Adapter before each read)
+    int predictor_ = 0;
+    bool restarted_ = false;
+    std::string velocityData_;
+    long window_ = 0;
+    double tau_ = 0;
+    double windowSize_ = 0;
+    std::map<std::string, History> history_;
+
+    //- Replace the first n buffer entries (data held constant across the
+    //  window by a parallel coupling) by the predictor's value at tau_
+    void predict(const std::string& dataName, std::size_t n, double relativeReadTime);
+
     //- Extracts the locations of the face centers or face nodes
     //  and exposes them to preCICE with setMeshVertices
     void configureMesh(const Foam::fvMesh& mesh,
@@ -107,6 +129,28 @@ public:
     //  If at least one couplingDataUser has vector data, then
     //  define a buffer for 3D data. Otherwise, for 1D data.
     void createBuffer();
+
+    //- Predictors for the Displacement and ServoAngle a parallel coupling
+    //  holds constant across a window (the latest sample, from the end of
+    //  the previous window): with d the latest sample, dp the one before,
+    //  v and vp the matching PlateVelocity samples, h the window size and
+    //  tau the fraction of the window elapsed at the read time,
+    //    hold      d
+    //    ramp      dp + tau (d - dp)       (continuous, one window late)
+    //    linear    d + tau (d - dp)
+    //    velocity  d + tau h v
+    //    ab2       d + tau h v + tau^2 h (v - vp) / 2
+    //  velocity and ab2 need velocityData; without it (and for ServoAngle,
+    //  which has no rate) they fall back to linear.
+    enum PredictorMode { hold = 0, ramp, linear, velocity, ab2 };
+    void setPredictor(int mode, const std::string& velocityData);
+
+    //- The fluid restarted from a saved time: the first window's ServoAngle
+    //  and RPM are preCICE's uninitialised zeros (a received mesh cannot
+    //  carry initial data), so keep the saved elevon deflection and the
+    //  rotor speeds the restart set in fvModels for that window instead.
+    void setRestarted(bool restarted) { restarted_ = restarted; }
+    void setWindow(long window, double tau, double windowSize);
 
     //- Call read() on each registered couplingDataReader to read the coupling
     //  data from the buffer and apply the boundary conditions

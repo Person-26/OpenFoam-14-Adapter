@@ -66,7 +66,8 @@ Foam::fvMotionSolvers::bodyDisplacementLaplacian::bodyDisplacementLaplacian
     preciceAdapter::FSI::bodyPoseField(mesh, "bodyRotationAcc");
     preciceAdapter::FSI::bodyPoseField(mesh, "bodyDisplacementJerk");
     preciceAdapter::FSI::bodyPoseField(mesh, "bodyRotationJerk");
-    preciceAdapter::FSI::bodyPoseTime(mesh);
+    preciceAdapter::FSI::bodyPoseTime(mesh, "bodyDisplacement");
+    preciceAdapter::FSI::bodyPoseTime(mesh, "bodyRotation");
 }
 
 
