@@ -4,6 +4,7 @@
 #include "cellSet.H"
 #include "fvModels.H"
 #include "propellerDisk.H"
+#include "rotorDisk.H"
 #include <map>
 
 using namespace Foam;
@@ -65,12 +66,16 @@ preciceAdapter::Interface::Interface(
         else
         {
             // Get the fixed points (propeller hub centres) from the
-            // propellerDisk fvModels listed in propellerNames_.
+            // propeller fvModels listed in propellerNames_: actuator disks
+            // (propellerDisk) or blade-element rotors (rotorDisk, its
+            // coordinate system's origin), at their reference positions.
             const fvModels& models = mesh.lookupObject<fvModels>("fvModels");
             for (const std::string& name : propellerNames_)
             {
-                const fv::propellerDisk& prop = dynamicCast<const fv::propellerDisk>(models[name]);
-                const vector& c = prop.centre();
+                const fvModel& model = models[name];
+                const vector c = isA<fv::rotorDisk>(model)
+                    ? refCast<const fv::rotorDisk>(model).coordSys().origin()
+                    : dynamicCast<const fv::propellerDisk>(model).centre();
                 fixedPoints_.push_back({c[0], c[1], c[2]});
             }
         }

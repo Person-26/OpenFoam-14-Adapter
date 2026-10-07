@@ -3,6 +3,7 @@
 
 #include "fvModels.H"
 #include "propellerDisk.H"
+#include "rotorDisk.H"
 #include "vector.H"
 
 using namespace Foam;
@@ -10,10 +11,12 @@ using namespace Foam;
 preciceAdapter::FSI::PropellerLoad::PropellerLoad(
     const Foam::fvMesh& mesh,
     std::vector<std::string> propellerNames,
-    bool isMoment)
+    bool isMoment,
+    Foam::scalar rho)
 : mesh_(mesh),
   propellerNames_(std::move(propellerNames)),
-  isMoment_(isMoment)
+  isMoment_(isMoment),
+  rho_(rho)
 {
     dataType_ = vector;
 }
@@ -29,16 +32,26 @@ std::size_t preciceAdapter::FSI::PropellerLoad::write(double* buffer, bool meshC
     // order as the propeller fvModels were specified.
     for (const std::string& name : propellerNames_)
     {
-        const fv::propellerDisk& prop = dynamicCast<const fv::propellerDisk>(models[name]);
-
-        // Sign convention (aircraft side):
-        // The propellerDisk source adds momentum to the FLUID in the +normal
-        // (thrust) direction; the reaction on the airframe is therefore
-        // in the -normal direction. We pass the aircraft-side thrust as
-        // -prop.force() and the reaction torque as -prop.moment().
-        // In the body frame when the mesh moves with a vehicle.
-        const Foam::vector value = bodyPose(mesh_).toBody(
-            isMoment_ ? -prop.moment() : -prop.force());
+        // Either model gives the fluid's load on the propeller (the thrust
+        // and reaction torque on the airframe as they are; propellerDisk's
+        // normal is the thrust direction, it pushes the fluid along -normal),
+        // times rho for an incompressible solver's kinematic loads. A
+        // blade-element rotorDisk also gives the in-plane force and the hub
+        // moments of oblique inflow. In the body frame when the mesh moves
+        // with a vehicle.
+        const fvModel& model = models[name];
+        Foam::vector load;
+        if (isA<fv::rotorDisk>(model))
+        {
+            const fv::rotorDisk& rotor = refCast<const fv::rotorDisk>(model);
+            load = isMoment_ ? rotor.moment() : rotor.force();
+        }
+        else
+        {
+            const fv::propellerDisk& prop = dynamicCast<const fv::propellerDisk>(model);
+            load = isMoment_ ? prop.moment() : prop.force();
+        }
+        const Foam::vector value = bodyPose(mesh_).toBody(rho_ * load);
 
         for (unsigned int d = 0; d < dim; ++d)
             buffer[bufferIndex++] = value[d];

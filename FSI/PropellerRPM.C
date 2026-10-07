@@ -2,6 +2,7 @@
 
 #include "fvModels.H"
 #include "propellerDisk.H"
+#include "rotorDisk.H"
 
 using namespace Foam;
 
@@ -25,15 +26,21 @@ void preciceAdapter::FSI::PropellerRPM::read(double* buffer, const unsigned int 
     // Get the fvModels object (contains all the fvModels of the case).
     fvModels& models = mesh_.lookupObjectRef<fvModels>("fvModels");
 
-    // One commanded RPM per propeller hub, in the same order as the
-    // propeller fvModels were specified. The sign selects the rotation
-    // direction (handled by propellerDisk::setRotationSpeed).
+    // One commanded speed [rev/s] per propeller hub, in the same order as
+    // the propeller fvModels were specified. The sign selects the rotation
+    // direction (each model's setRotationSpeed). Either an actuator disk
+    // (propellerDisk) or a blade-element rotor (rotorDisk).
     for (std::size_t i = 0; i < propellerNames_.size(); ++i)
     {
-        fv::propellerDisk& prop =
-            dynamicCast<fv::propellerDisk>(models[propellerNames_[i]]);
-
-        prop.setRotationSpeed(buffer[i]);
+        fvModel& model = models[propellerNames_[i]];
+        if (isA<fv::rotorDisk>(model))
+        {
+            refCast<fv::rotorDisk>(model).setRotationSpeed(buffer[i]);
+        }
+        else
+        {
+            dynamicCast<fv::propellerDisk>(model).setRotationSpeed(buffer[i]);
+        }
     }
 }
 

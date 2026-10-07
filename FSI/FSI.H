@@ -50,6 +50,11 @@ protected:
     //- Names of the propellerDisk fvModels to couple (e.g. "propeller1")
     std::vector<std::string> propellerNames_;
 
+    //- Density that turns an incompressible solver's kinematic propeller
+    //  loads (propellerDisk works in T/rho) into forces (FSI rho; 1 for a
+    //  compressible solver, whose loads already carry rho)
+    Foam::scalar propellerRho_ = 1.0;
+
     //- Control surface configurations (patch + hinge + axis), ordered to
     //  match the fixedPoints of the Control-Mesh interface.
     std::vector<ControlSurfaceConfig> controlSurfaces_;

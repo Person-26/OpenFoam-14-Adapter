@@ -55,6 +55,11 @@ bool preciceAdapter::FSI::FluidStructureInteraction::readConfig(const IOdictiona
     solverType_ = FSIdict.lookupOrDefault<word>("solverType", "");
     DEBUG(adapterInfo("    user-defined solver type : " + solverType_));
 
+    if (solverType_ == "incompressible" && FSIdict.found("rho"))
+    {
+        propellerRho_ = static_cast<dimensionedScalar>(FSIdict.lookup("rho")).value();
+    }
+
     // When restarting FSI simulations, we may need to account for previous displacement.
     // We do this by resetting the displacement when defining the interface.
     // Since this is a feature that may not work as expected, depending on the implementation of the
@@ -199,14 +204,14 @@ bool preciceAdapter::FSI::FluidStructureInteraction::addWriters(std::string data
     {
         interface->addCouplingDataWriter(
             dataName,
-            new PropellerLoad(mesh_, propellerNames_, false));
+            new PropellerLoad(mesh_, propellerNames_, false, propellerRho_));
         DEBUG(adapterInfo("Added writer: PropellerLoad (thrust)."));
     }
     else if (dataName.find("PropTorque") == 0)
     {
         interface->addCouplingDataWriter(
             dataName,
-            new PropellerLoad(mesh_, propellerNames_, true));
+            new PropellerLoad(mesh_, propellerNames_, true, propellerRho_));
         DEBUG(adapterInfo("Added writer: PropellerLoad (torque)."));
     }
     else if (dataName.find("HingeForce") == 0)

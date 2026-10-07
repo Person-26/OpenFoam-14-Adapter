@@ -37,7 +37,7 @@ protected:
     //- Names of the OpenFOAM cell sets to be coupled (for volume coupling)
     std::vector<std::string> cellSetNames_;
 
-    //- Names of the propellerDisk fvModels to be coupled (for fixedPoints)
+    //- Names of the propeller fvModels (propellerDisk or rotorDisk) to be coupled (for fixedPoints)
     std::vector<std::string> propellerNames_;
 
     //- Explicit fixed 3D points of the interface (for the fixedPoints

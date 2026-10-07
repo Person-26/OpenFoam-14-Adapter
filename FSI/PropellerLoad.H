@@ -14,11 +14,13 @@ namespace FSI
 //  this data is meant to live on an interface with location type
 //  "fixedPoints" registered at the propeller disk centres.
 //
-//  Sign convention (aircraft side):
-//    - Thrust     = -propellerDisk.force()   (force of the propeller on
-//                    the airframe, i.e. the reaction to the fluid force)
-//    - PropTorque = -propellerDisk.moment()  (reaction torque on the
-//                    airframe about the hub centre)
+//  Sign convention: propellerDisk's normal is the direction of the thrust
+//  on the propeller (it pushes the fluid the other way), and force() and
+//  moment() are the fluid's force and moment on the propeller, so
+//    - Thrust     = rho propellerDisk.force()
+//    - PropTorque = rho propellerDisk.moment()
+//  with rho the FSI density for an incompressible solver, whose disk loads
+//  are kinematic (per unit density), and 1 for a compressible one.
 class PropellerLoad : public CouplingDataUser
 {
 private:
@@ -33,12 +35,16 @@ private:
     //- Coupled quantity (true = moment, false = force)
     const bool isMoment_;
 
+    //- Density the disk loads are scaled by (see above)
+    const Foam::scalar rho_;
+
 public:
     //- Constructor
     PropellerLoad(
         const Foam::fvMesh& mesh,
         std::vector<std::string> propellerNames,
-        bool isMoment);
+        bool isMoment,
+        Foam::scalar rho = 1.0);
 
     //- Write the propeller loads to the buffer
     std::size_t write(double* buffer, bool meshConnectivity, const unsigned int dim) final;
